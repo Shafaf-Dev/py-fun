@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, simpledialog
+from tkinter import ttk, simpledialog, messagebox
 from PIL import Image, ImageTk
 import os
 import random
@@ -7,7 +7,7 @@ import random
 
 def main():
     root = tk.Tk()
-    app = MysteriousIslandAdventureGUI(root)
+    MysteriousIslandAdventureGUI(root)
     root.mainloop()
 
 
@@ -28,6 +28,13 @@ class MysteriousIslandAdventure:
         self.player = None
         self.game_over = False
 
+        # Initialize these attributes to prevent AttributeError
+        self.health_bar = None
+        self.health_label = None
+        self.score_label = None
+        self.inventory_label = None
+        self.game_text = None
+
         self.start_game()
 
     def start_game(self):
@@ -42,7 +49,7 @@ class MysteriousIslandAdventure:
                 + "Your mission is to survive and escape!"
             )
         else:
-            self.master.quit
+            self.master.quit()
 
     def search_beach(self):
         events = [self.find_shipwreck, self.collect_shells, self.spot_rescue_boat]
@@ -62,7 +69,7 @@ class MysteriousIslandAdventure:
         self.player.score += 20
         self.update_status()
 
-    def spot_rescue_boat():
+    def spot_rescue_boat(self):
         if random.random() < 0.5:
             self.display_text(
                 "You spot a distant rescue boat, but it's too far away to signal..."
@@ -96,6 +103,14 @@ class MysteriousIslandAdventure:
         self.display_text(f"You rest and recover {heal_amount} health points!")
         self.update_status()
 
+    def explore_forest(self):
+        events = [
+            self.find_treasure,
+            self.encounter_wild_animal,
+            self.discover_mysterious_artifact,
+        ]
+        random.choice(events)()
+
     def find_treasure(self):
         treasure = random.choice(["Golden Key", "Ancient Map", "Mysterious Gem"])
         self.player.inventory.append(treasure)
@@ -122,21 +137,32 @@ class MysteriousIslandAdventure:
         self.update_status()
 
     def display_text(self, message):
-        self.game_text.configure(state="normal")
-        self.game_text.delete(1.0, tk.END)
-        self.game_text.insert(tk.END, message)
-        self.game_text.configure(state="disabled")
+        if hasattr(self, 'game_text'):
+            self.game_text.configure(state="normal")
+            self.game_text.delete(1.0, tk.END)
+            self.game_text.insert(tk.END, message)
+            self.game_text.configure(state="disabled")
 
     def update_status(self):
-        self.health_label.config(text=f"Health: {self.player.health}")
-        self.score_label.config(text=f"Score: {self.player.score}")
-        self.inventory_label.config(
-            text=f"Inventory: {', '.join(self.player.inventory) if self.player.inventory else 'Empty'}"
-        )
+        # Update health (either progress bar or label)
+        if hasattr(self, 'health_bar'):
+            self.health_bar['value'] = self.player.health
+        if hasattr(self, 'health_label'):
+            self.health_label.config(text=f"Health: {self.player.health}")
+        
+        # Update score
+        if hasattr(self, 'score_label'):
+            self.score_label.config(text=f"Score: {self.player.score}")
+        
+        # Update inventory
+        if hasattr(self, 'inventory_label'):
+            self.inventory_label.config(
+                text=f"Inventory: {', '.join(self.player.inventory) if self.player.inventory else 'Empty'}"
+            )
 
     def game_over_screen(self):
         messagebox.showinfo(
-            "Game Over"
+            "Game Over", 
             f"Game Over!\nFinal Score: {self.player.score}\n"
             + "You were unable to survive the Mysterious Island..."
         )
@@ -167,15 +193,21 @@ class MysteriousIslandAdventureGUI(MysteriousIslandAdventure):
 
         # Load images
         self.images = {
-            "background": self.load_image("background.png", (800, 400)),
-            "inventory_icon": self.load_image("inventory_icon.png", (30, 30)),
-            "health_icon": self.load_image("health_icon.png", (30, 30)),
-            "score_icon": self.load_image("score_icon.png", (30, 30)),
+            "background": self.load_default_image((800, 400), "#87CEEB"),  # Sky blue background
+            "inventory_icon": self.load_default_image((30, 30), "#2ecc71"),  # Green icon
+            "health_icon": self.load_default_image((30, 30), "#e74c3c"),  # Red icon
+            "score_icon": self.load_default_image((30, 30), "#f39c12"),  # Orange icon
         }
+
+    def load_default_image(self, size, color):
+        """Create a default colored image if no image is found"""
+        from PIL import Image, ImageDraw
+        
+        image = Image.new('RGBA', size, color)
+        return ImageTk.PhotoImage(image)
 
     def load_image(self, filename, size):
         """Loading and resizing the image"""
-
         try:
             img_path = os.path.join("game_resources", filename)
             image = Image.open(img_path)
@@ -183,7 +215,8 @@ class MysteriousIslandAdventureGUI(MysteriousIslandAdventure):
             return ImageTk.PhotoImage(image)
         except Exception as e:
             print(f"Error loading image {filename}: {e}")
-            return None
+            # Return a default image if loading fails
+            return self.load_default_image(size, "#3498db")
 
     def create_background(self):
         # Create a canvas for the background.
@@ -209,11 +242,18 @@ class MysteriousIslandAdventureGUI(MysteriousIslandAdventure):
         )
         health_icon.pack(side="left", padx=(0, 5))
 
+        # Add both health bar and label to support both base and GUI classes
         self.health_bar = ttk.Progressbar(
-            health_frame, length=200, mode="determinate", maximum=100
+            health_frame, length=200, mode="determinate", maximum=100, value=100
         )
-
         self.health_bar.pack(side="left")
+
+        # Add a health label as well
+        self.health_label = tk.Label(
+            health_frame, text="Health: 100", font=("Arial", 12), 
+            bg="#34495e", fg="white"
+        )
+        self.health_label.pack(side="left", padx=5)
 
         # Score Section
         score_frame = tk.Frame(status_frame, bg="#34495e")
@@ -265,15 +305,6 @@ class MysteriousIslandAdventureGUI(MysteriousIslandAdventure):
                 font=("Arial", 10),
             )
             btn.pack(side="left", padx=5)
-
-    def explore_forest(self):
-        events = [
-            self.find_treasure,
-            self.encounter_wild_animal,
-            self.discover_mysterious_artifact,
-        ]
-
-        random.choice(events)()
 
     def create_inventory_display(self):
         # Inventory Frame
